@@ -122,6 +122,12 @@ plt.show()
 
 y_pred = model.predict(testX)
 
+from sklearn.preprocessing import StandardScaler
+scaler = StandardScaler()
+y_pred = scaler.inverse_transform(y_pred)
+testY = scaler.inverse_transform(testY)
+
+
 # Evaluate the performance of the model
 mse = np.mean(np.square(testY - y_pred))
 print("Mean Squared Error:", mse)
