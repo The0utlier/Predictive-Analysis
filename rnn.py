@@ -14,69 +14,72 @@ np.random.seed(42)
 # Download the historical data for Bitcoin
 df = yf.download(tickers='BTC-USD', period='90d', interval='1d')
 
-# Add technical indicators to the data frame
-df['EMA_12'] = df['Adj Close'].ewm(span=12).mean()
-df['EMA_26'] = df['Adj Close'].ewm(span=26).mean()
-df['Divergence'] = df['EMA_12'] - df['EMA_26']
-df['OBV'] = ta.obv(df.Close, df.Volume)
-df['EMAF'] = ta.ema(df.Close, length=20)
-df['SMA_5'] = ta.sma(df.Close, 5)
-df['EMA_10'] = ta.ema(df.Close, 10)
-df['RSI_14'] = ta.rsi(df.Close, 14)
-df['ATR_14'] = ta.atr(df.High, df.Low, df.Close, 14)
-df['CCI_14'] = ta.cci(df.High, df.Low, df.Close, 14)
-df['WILLR_14'] = ta.willr(df.High, df.Low, df.Close, 14)
-df['Fib_0.236'] = (df['High'] - df['Low']) * 0.236 + df['Low']
-df['Fib_0.382'] = (df['High'] - df['Low']) * 0.382 + df['Low']
-df['Fib_0.5'] = (df['High'] - df['Low']) * 0.5 + df['Low']
-df['Fib_0.618'] = (df['High'] - df['Low']) * 0.618 + df['Low']
-df['Fib_0.786'] = (df['High'] - df['Low']) * 0.786 + df['Low']
+returns = df['Adj Close'].pct_change() # Used for univariate example.
 
-df['Target'] = df['Adj Close'].shift(-1)
-
-returns = df['Adj Close'].pct_change()
-df = df.dropna()
+column_names = df.columns
+x = df.values #returns a numpy array
 min_max_scaler = MinMaxScaler()
-
-x = df.values
 x_scaled = min_max_scaler.fit_transform(x)
 df = pd.DataFrame(x_scaled)
 
 # Flatten this matrix down.
-npa = returns.values[1:].reshape(-1,1)
-scale = MinMaxScaler(feature_range=(0,1))
+npa = returns.values[1:].reshape(-1,1) # Python is smart to recognize whatever dimension you need by using this parameter
+print(len(npa))
+# # Let's scale the data -- this helps avoid the exploding gradient issue
+scale = MinMaxScaler(feature_range=(0,1)) # This is by default.
 npa = scale.fit_transform(npa)
+print(len(npa))
 
 # Need the data to be in the form [sample, time steps, features (dimension of each element)]
-samples = 3 # Number of samples (in past)
+# Need the data to be in the form [sample, time steps, features (dimension of each element)]
+samples = 10 # Number of samples (in past)
 steps = 1 # Number of steps (in future)
 X = [] # X array
 Y = [] # Y array
-for i in range((df).shape[0] - samples):
-    X.append(df.iloc[i:i+samples, :-1].values) # Independent Samples (all columns except target)
-    Y.append(df.iloc[i+samples, -1:].values) # Dependent Samples (only target column)
+for i in range(df.shape[0] - samples):
+    X.append(df.iloc[i:i+samples, 0:5].values) # Independent Samples
+    Y.append(df.iloc[i+samples, 5:].values) # Dependent Samples
 print('Training Data: Length is ',len(X[0:1][0]),': ', X[0:1])
 print('Testing Data: Length is ', len(Y[0:1]),': ', Y[0:1])
 
-# Reshape the data so that the inputs will be acceptable to the model.
 X = np.array(X)
 Y = np.array(Y)
-X = np.reshape(X, (X.shape[0], samples, X.shape[2])) # Reshape X
-Y = np.reshape(Y, (Y.shape[0], Y.shape[1])) # Reshape Y
+print('Dimensions of X', X.shape, 'Dimensions of Y', Y.shape)
+# # Get the training and testing set
+threshold = round(0.9 * X.shape[0])
+trainX, trainY = X[:threshold], Y[:threshold]
+testX, testY =  X[threshold:], Y[threshold:]
+print('Training Length',trainX.shape, trainY.shape,'Testing Length:',testX.shape, testY.shape)
 
-# Split the data into training and testing sets
-X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.3, shuffle=False)
-
-# Build the model
+# Let's build the RNN
 model = keras.Sequential()
-model.add(layers.LSTM(64, input_shape=(samples, X.shape[2]), return_sequences=True))
-model.add(layers.LSTM(32))
-model.add(layers.Dense(Y.shape[1]))
 
-model.compile(loss='mse', optimizer='adam')
+# Add a RNN layer with 30 internal units.
+model.add(layers.SimpleRNN(30,
+                           activation = 'tanh',
+                           use_bias=True,
+                           input_shape=(trainX.shape[1], trainX.shape[2])))
+# Add a dropout layer (penalizing more complex models) -- prevents overfitting
+model.add(layers.Dropout(rate=0.2))
 
-# Train the model
-history = model.fit(X_train, Y_train, epochs=50, batch_size=16, validation_split=0.1, verbose=1)
+
+# Add a Dense layer with 1 units (Since we are doing a regression task.
+model.add(layers.Dense(1))
+
+# Evaluating loss function of MSE using the adam optimizer.
+model.compile(loss='mean_squared_error', optimizer = 'adam')
+
+# Print out architecture.
+model.summary()
+# Fitting the data
+# Fitting the data
+history = model.fit(trainX,
+                    trainY,
+                    shuffle = False, # Since this is time series data
+                    epochs=100,
+                    batch_size=32,
+                    validation_split=0.2,
+                    verbose=1) # Verbose outputs data
 
 # Plot the training and validation loss
 plt.plot(history.history['loss'])
@@ -87,20 +90,7 @@ plt.xlabel('Epoch')
 plt.legend(['Train', 'Validation'], loc='upper right')
 plt.show()
 
-# Make predictions
-trainPredict = model.predict(X_train)
-testPredict = model.predict(X_test)
-
-print(testPredict)
-
-# Invert predictions back to actual numbers
-trainPredict = scale.inverse_transform(trainPredict)
-trainY = scale.inverse_transform(Y_train)
-testPredict = scale.inverse_transform(testPredict)
-testY = scale.inverse_transform(Y_test)
-print(testPredict)
-
-
+'''
 # Plot the predicted values against the actual values
 plt.plot(trainY[:, 0])
 plt.plot(trainPredict[:, 0])
@@ -135,3 +125,5 @@ trainScore_mape = mean_absolute_percentage_error(trainY[:, 0], trainPredict[:, 0
 print('Train Score (MAPE): %.2f%%' % (trainScore_mape*100))
 testScore_mape = mean_absolute_percentage_error(testY[:, 0], testPredict[:, 0])
 print('Test Score (MAPE): %.2f%%' % (testScore_mape*100))
+
+'''
