@@ -1,6 +1,7 @@
 
 
 #source = https://github.com/abhinavsagar/cryptocurrency-price-prediction/blob/master/price_prediction.ipynb
+
 import json
 import requests
 from keras.models import Sequential
@@ -14,11 +15,11 @@ from sklearn.metrics import mean_absolute_error
 import yfinance as yf
 
 # Set the random seed to ensure reproducibility
-np.random.seed(42)
 
 # Download the historical data for Bitcoin
 df = yf.download(tickers='BTC-USD', period='90d', interval='1d')
-#df['Target'] = df['Adj Close'].shift(-1)
+# Add technical indicators to the data frame
+
 df.dropna()
 
 hist = df
@@ -41,12 +42,13 @@ def line_plot(line1, line2, label1=None, label2=None, title='', lw=2):
     ax.set_ylabel('price [CAD]', fontsize=14)
     ax.set_title(title, fontsize=16)
     ax.legend(loc='best', fontsize=16);
-    plt.show()
+    #plt.show()
 
 line_plot(train[target_col], test[target_col], 'training', 'test', title='')
 
 def normalise_zero_base(df):
     return df / df.iloc[0] - 1
+
 
 def normalise_min_max(df):
     return (df - df.min()) / (df.max() - df.min())
@@ -70,22 +72,27 @@ def prepare_data(df, target_col, window_len=10, zero_base=True, test_size=0.2):
         y_test = y_test / test_data[target_col][:-window_len].values - 1
 
     return train_data, test_data, X_train, X_test, y_train, y_test
+
 def build_lstm_model(input_data, output_size, neurons=100, activ_func='linear',
                      dropout=0.2, loss='mse', optimizer='adam'):
     model = Sequential()
-    model.add(LSTM(neurons, input_shape=(input_data.shape[1], input_data.shape[2])))
+    model.add(LSTM(neurons, return_sequences=True, input_shape=(input_data.shape[1], input_data.shape[2])))
+    model.add(Dropout(dropout))
+    model.add(LSTM(neurons))
     model.add(Dropout(dropout))
     model.add(Dense(units=output_size))
     model.add(Activation(activ_func))
 
     model.compile(loss=loss, optimizer=optimizer)
     return model
-np.random.seed(42)
-window_len = 5
+
+np.random.seed(104)
+
+window_len = 3
 test_size = 0.2
 zero_base = True
-lstm_neurons = 100
-epochs = 20
+lstm_neurons = 150
+epochs = 200
 batch_size = 32
 loss = 'mse'
 dropout = 0.2
@@ -101,8 +108,17 @@ history = model.fit(
 
 targets = test[target_col][window_len:]
 preds = model.predict(X_test).squeeze()
-error = mean_absolute_error(preds, y_test)
-print(error)
+
+
 preds = test[target_col].values[:-window_len] * (preds + 1)
 preds = pd.Series(index=targets.index, data=preds)
 line_plot(targets, preds, 'actual', 'prediction', lw=3)
+
+# Inverse transform the normalized predictions and actual values
+#preds_orig = preds / normalise_zero_base(hist[target_col].values)[:len(preds)] - 1
+#targets_orig = targets / normalise_zero_base(hist[target_col].values)[:len(targets)] - 1
+
+# Calculate the mean absolute error on the original scale
+mae_orig = mean_absolute_error(targets, preds)
+print('MAE on original scale:', mae_orig)
+
