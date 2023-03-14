@@ -65,7 +65,7 @@ y = df['TargetNextClose']
 from sklearn.model_selection import train_test_split
 
 # Split the data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+X_train, y_train, X_test, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 #perfect = cross_validation()['n_estimators']
 #print(perfect)
@@ -74,16 +74,16 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 
 rf = RandomForestRegressor(n_estimators=500)#400)
 
-rf.fit(X, y)
+rf.fit(X_train, y_train)
 
 # Make predictions on the test data
 #y_pred = rf.predict(X[-1:])
 
 #print(f"Prediction for tomorrow: {y_pred}")
 
-y_pred = rf.predict(X)
+y_pred = rf.predict(X_test)
 
 print(f"Tomorrow's prediction {y_pred[-1]}")
 
-mae = mean_absolute_error(y, y_pred)
+mae = mean_absolute_error(y_test, y_pred)
 print(mae)
