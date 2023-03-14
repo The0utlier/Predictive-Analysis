@@ -37,8 +37,6 @@ df = df[columns]
 df = df.dropna()
 #df = df.drop(columns=['EMA_12', 'EMA_26'], axis=1)
 
-
-
 independant = [i for i in columns if i != 'TargetNextClose']
 X = df[independant]
 y = df['TargetNextClose']
