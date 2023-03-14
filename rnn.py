@@ -1,129 +1,106 @@
-import yfinance as yf
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.preprocessing import MinMaxScaler
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import layers
-import pandas_ta as ta
-from sklearn.model_selection import train_test_split
 
+import json
+import requests
+from keras.models import Sequential
+from keras.layers import Activation, Dense, Dropout, LSTM
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas_ta as ta
+import pandas as pd
+import seaborn as sns
+from sklearn.metrics import mean_absolute_error
+import yfinance as yf
+
+# Set the random seed to ensure reproducibility
 np.random.seed(42)
 
 # Download the historical data for Bitcoin
 df = yf.download(tickers='BTC-USD', period='90d', interval='1d')
+#df['Target'] = df['Adj Close'].shift(-1)
+df.dropna()
 
-returns = df['Adj Close'].pct_change() # Used for univariate example.
-
-column_names = df.columns
-x = df.values #returns a numpy array
-min_max_scaler = MinMaxScaler()
-x_scaled = min_max_scaler.fit_transform(x)
-df = pd.DataFrame(x_scaled)
-
-# Flatten this matrix down.
-npa = returns.values[1:].reshape(-1,1) # Python is smart to recognize whatever dimension you need by using this parameter
-print(len(npa))
-# # Let's scale the data -- this helps avoid the exploding gradient issue
-scale = MinMaxScaler(feature_range=(0,1)) # This is by default.
-npa = scale.fit_transform(npa)
-print(len(npa))
-
-# Need the data to be in the form [sample, time steps, features (dimension of each element)]
-# Need the data to be in the form [sample, time steps, features (dimension of each element)]
-samples = 10 # Number of samples (in past)
-steps = 1 # Number of steps (in future)
-X = [] # X array
-Y = [] # Y array
-for i in range(df.shape[0] - samples):
-    X.append(df.iloc[i:i+samples, 0:5].values) # Independent Samples
-    Y.append(df.iloc[i+samples, 5:].values) # Dependent Samples
-print('Training Data: Length is ',len(X[0:1][0]),': ', X[0:1])
-print('Testing Data: Length is ', len(Y[0:1]),': ', Y[0:1])
-
-X = np.array(X)
-Y = np.array(Y)
-print('Dimensions of X', X.shape, 'Dimensions of Y', Y.shape)
-# # Get the training and testing set
-threshold = round(0.9 * X.shape[0])
-trainX, trainY = X[:threshold], Y[:threshold]
-testX, testY =  X[threshold:], Y[threshold:]
-print('Training Length',trainX.shape, trainY.shape,'Testing Length:',testX.shape, testY.shape)
-
-# Let's build the RNN
-model = keras.Sequential()
-
-# Add a RNN layer with 30 internal units.
-model.add(layers.SimpleRNN(30,
-                           activation = 'tanh',
-                           use_bias=True,
-                           input_shape=(trainX.shape[1], trainX.shape[2])))
-# Add a dropout layer (penalizing more complex models) -- prevents overfitting
-model.add(layers.Dropout(rate=0.2))
+hist = df
+hist.index = pd.to_datetime(hist.index, unit='s')
+target_col = 'Close'
 
 
-# Add a Dense layer with 1 units (Since we are doing a regression task.
-model.add(layers.Dense(1))
 
-# Evaluating loss function of MSE using the adam optimizer.
-model.compile(loss='mean_squared_error', optimizer = 'adam')
+def train_test_split(df, test_size=0.2):
+    split_row = len(df) - int(test_size * len(df))
+    train_data = df.iloc[:split_row]
+    test_data = df.iloc[split_row:]
+    return train_data, test_data
 
-# Print out architecture.
-model.summary()
-# Fitting the data
-# Fitting the data
-history = model.fit(trainX,
-                    trainY,
-                    shuffle = False, # Since this is time series data
-                    epochs=100,
-                    batch_size=32,
-                    validation_split=0.2,
-                    verbose=1) # Verbose outputs data
+train, test = train_test_split(hist, test_size=0.2)
+def line_plot(line1, line2, label1=None, label2=None, title='', lw=2):
+    fig, ax = plt.subplots(1, figsize=(13, 7))
+    ax.plot(line1, label=label1, linewidth=lw)
+    ax.plot(line2, label=label2, linewidth=lw)
+    ax.set_ylabel('price [CAD]', fontsize=14)
+    ax.set_title(title, fontsize=16)
+    ax.legend(loc='best', fontsize=16);
+    plt.show()
 
-# Plot the training and validation loss
-plt.plot(history.history['loss'])
-plt.plot(history.history['val_loss'])
-plt.title('Model loss')
-plt.ylabel('Loss')
-plt.xlabel('Epoch')
-plt.legend(['Train', 'Validation'], loc='upper right')
-plt.show()
+line_plot(train[target_col], test[target_col], 'training', 'test', title='')
 
-'''
-# Plot the predicted values against the actual values
-plt.plot(trainY[:, 0])
-plt.plot(trainPredict[:, 0])
-plt.title('Train Predictions')
-plt.ylabel('Price')
-plt.xlabel('Days')
-plt.legend(['Actual', 'Predicted'], loc='upper left')
-plt.show()
+def normalise_zero_base(df):
+    return df / df.iloc[0] - 1
 
-plt.plot(testY[:, 0])
-plt.plot(testPredict[:, 0])
-plt.title('Test Predictions')
-plt.ylabel('Price')
-plt.xlabel('Days')
-plt.legend(['Actual', 'Predicted'], loc='upper left')
-plt.show()
+def normalise_min_max(df):
+    return (df - df.min()) / (df.max() - df.min())
+def extract_window_data(df, window_len=5, zero_base=True):
+    window_data = []
+    for idx in range(len(df) - window_len):
+        tmp = df[idx: (idx + window_len)].copy()
+        if zero_base:
+            tmp = normalise_zero_base(tmp)
+        window_data.append(tmp.values)
+    return np.array(window_data)
 
+def prepare_data(df, target_col, window_len=10, zero_base=True, test_size=0.2):
+    train_data, test_data = train_test_split(df, test_size=test_size)
+    X_train = extract_window_data(train_data, window_len, zero_base)
+    X_test = extract_window_data(test_data, window_len, zero_base)
+    y_train = train_data[target_col][window_len:].values
+    y_test = test_data[target_col][window_len:].values
+    if zero_base:
+        y_train = y_train / train_data[target_col][:-window_len].values - 1
+        y_test = y_test / test_data[target_col][:-window_len].values - 1
 
-from sklearn.metrics import mean_absolute_error
-from sklearn.metrics import mean_absolute_percentage_error
+    return train_data, test_data, X_train, X_test, y_train, y_test
+def build_lstm_model(input_data, output_size, neurons=100, activ_func='linear',
+                     dropout=0.2, loss='mse', optimizer='adam'):
+    model = Sequential()
+    model.add(LSTM(neurons, input_shape=(input_data.shape[1], input_data.shape[2])))
+    model.add(Dropout(dropout))
+    model.add(Dense(units=output_size))
+    model.add(Activation(activ_func))
 
-# Calculate mean absolute error (MAE) for training and testing data
-trainScore_mae = mean_absolute_error(trainY[:, 0], trainPredict[:, 0])
-print('Train Score (MAE): %.2f' % (trainScore_mae))
-testScore_mae = mean_absolute_error(testY[:, 0], testPredict[:, 0])
-print('Test Score (MAE): %.2f' % (testScore_mae))
+    model.compile(loss=loss, optimizer=optimizer)
+    return model
+np.random.seed(42)
+window_len = 5
+test_size = 0.2
+zero_base = True
+lstm_neurons = 100
+epochs = 20
+batch_size = 32
+loss = 'mse'
+dropout = 0.2
+optimizer = 'adam'
 
-print(testPredict)
+train, test, X_train, X_test, y_train, y_test = prepare_data(
+    hist, target_col, window_len=window_len, zero_base=zero_base, test_size=test_size)
+model = build_lstm_model(
+    X_train, output_size=1, neurons=lstm_neurons, dropout=dropout, loss=loss,
+    optimizer=optimizer)
+history = model.fit(
+    X_train, y_train, epochs=epochs, batch_size=batch_size, verbose=1, shuffle=True)
 
-# Calculate mean absolute percentage error (MAPE) for training and testing data
-trainScore_mape = mean_absolute_percentage_error(trainY[:, 0], trainPredict[:, 0])
-print('Train Score (MAPE): %.2f%%' % (trainScore_mape*100))
-testScore_mape = mean_absolute_percentage_error(testY[:, 0], testPredict[:, 0])
-print('Test Score (MAPE): %.2f%%' % (testScore_mape*100))
-
-'''
+targets = test[target_col][window_len:]
+preds = model.predict(X_test).squeeze()
+error = mean_absolute_error(preds, y_test)
+print(error)
+preds = test[target_col].values[:-window_len] * (preds + 1)
+preds = pd.Series(index=targets.index, data=preds)
+line_plot(targets, preds, 'actual', 'prediction', lw=3)
