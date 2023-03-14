@@ -1,4 +1,6 @@
 
+
+#source = https://github.com/abhinavsagar/cryptocurrency-price-prediction/blob/master/price_prediction.ipynb
 import json
 import requests
 from keras.models import Sequential
