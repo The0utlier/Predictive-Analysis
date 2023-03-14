@@ -16,6 +16,8 @@ from pytrends.request import TrendReq
 
 df = yf.download(tickers='BTC-USD', period='90d', interval='1d')#cv
 
+df = ta.add_all_ta_features(df, open="Open", high="High", low="Low", close="Close", volume="Volume")
+
 
 #noramlize and remove outliers
 
