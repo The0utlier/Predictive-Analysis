@@ -40,13 +40,31 @@ df['TargetNextClose'] = df['Adj Close'].shift(-1)
 
 df['Target'] = np.where(df['TargetNextClose'] > df['Close'], 1, 0)
 
-df = df.dropna()
+df.dropna(inplace=True) #false
+# Remove outliers using the IQR method
+'''
+Q1 = df.quantile(0.25)
+Q3 = df.quantile(0.75)
+IQR = Q3 - Q1
+df = df[~((df < (Q1 - 1.5 * IQR)) |(df > (Q3 + 1.5 * IQR))).any(axis=1)]
+'''
+
+
+# Normalize the data using StandardScaler
+'''
+scaler = StandardScaler()
+'''
 
 y = df['Target']
 
 df = df.drop(['Adj Close', 'TargetNextClose', 'Target'], axis=1)
 
 X = df
+'''
+X = scaler.fit_transform(X)
+'''
+
+
 
 # Split the data into training and testing sets
 from sklearn.model_selection import train_test_split
