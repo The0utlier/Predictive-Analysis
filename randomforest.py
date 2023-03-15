@@ -11,25 +11,14 @@ import seaborn as sns
 import numpy as np
 from sklearn.metrics import r2_score
 from sklearn.metrics import mean_absolute_error
-from pytrends.request import TrendReq
+
 # set the seed to 42
 
-df = yf.download(tickers='BTC-USD', period='90d', interval='1d')#cv
-
-df = ta.add_all_ta_features(df, open="Open", high="High", low="Low", close="Close", volume="Volume")
+df = yf.download(tickers='BTC-USD', period='10d', interval='30m')#cv
 
 
-#noramlize and remove outliers
-
-#df = df[np.abs(data-data.mean()) <= (3*data.std())] 
-#print(df.tail(1))
-#df['MACD'], df['MACD_Signal'], df['MACD_Hist'] = ta.macd(df.Close)
 df['TargetNextClose'] = df['Adj Close'].shift(-1)
-#df['BBANDS_20'] = ta.bbands(df.Close, 20)
-#df['MACD_12_26'] = ta.macd(df.Close, 12, 26)
-#df['STOCH_14_3_3'] = ta.stoch(df.High, df.Low, df.Close, 14, 3, 3)
 
-#print(df.tail(10))
 #fibonnacci
 
 #print(df.tail(10))
