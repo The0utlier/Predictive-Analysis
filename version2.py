@@ -11,7 +11,6 @@ import time
 import yfinance as yf
 from keras.layers import RepeatVector
 from keras.layers import TimeDistributed
-# ... previous code ...
 
 # define the scoring metric
 #Reshape your data either using array.reshape(-1, 1) if your data has a single feature or array.reshape(1, -1) if it contains a single sample.
@@ -43,6 +42,7 @@ def sequential_prediction():
     X, y = split_sequence(raw_seq, n_steps)
 
     model = MLPRegressor(hidden_layer_sizes=(25, ), max_iter=5000)
+	
 
     # fit model
     model.fit(X, y) #2000
@@ -55,6 +55,9 @@ def sequential_prediction():
     #print(future)
     mae = mean_absolute_error(y.flatten(), y_pred.flatten())
     print(f'mae of mlp {mae}')
+    y_pred_mlp = model.predict(X)
+    mape_mlp = np.mean(np.abs((y - y_pred_mlp) / y)) * 100
+    print("MAPE for MLP model: ", mape_mlp)
 
 sequential_prediction()
 
@@ -100,7 +103,10 @@ x_input = x_input.reshape((1, n_steps_in, n_features))
 future = model.predict(x_input, verbose=0)
 y_pred = model.predict(X)
 mae = mean_absolute_error(y.flatten(), y_pred.flatten())
-print(mae)
+print(f'Mae for lstm {mae}')
+y_pred_lstm = model.predict(X)
+mape_lstm = np.mean(np.abs((y - y_pred_lstm) / y)) * 100
+print("MAPE for LSTM model: ", mape_lstm)
 
 end = time.time()
 print(end-start)
