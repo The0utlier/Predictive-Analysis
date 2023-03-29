@@ -7,6 +7,7 @@ from keras.layers import LSTM
 from sklearn.metrics import mean_absolute_error
 from tensorflow.keras.layers import Dense
 import pandas as pd
+import time 
 import yfinance as yf
 from keras.layers import RepeatVector
 from keras.layers import TimeDistributed
@@ -15,10 +16,11 @@ from keras.layers import TimeDistributed
 # define the scoring metric
 #Reshape your data either using array.reshape(-1, 1) if your data has a single feature or array.reshape(1, -1) if it contains a single sample.
 
-raw_seq = yf.download(tickers='BTC-USD', period='90d', interval='1d')
+raw_seq = yf.download(tickers='BTC-USD', period='10d', interval='90m')
 # define input sequence
 raw_seq = pd.Series(raw_seq['Close'])
 
+start = time.time()
 def sequential_prediction():
     # split a univariate sequence into samples
     def split_sequence(sequence, n_steps):
@@ -52,7 +54,7 @@ def sequential_prediction():
     y_pred = model.predict(X)
     #print(future)
     mae = mean_absolute_error(y.flatten(), y_pred.flatten())
-    print(mae)
+    print(f'mae of mlp {mae}')
 
 sequential_prediction()
 
@@ -99,4 +101,7 @@ future = model.predict(x_input, verbose=0)
 y_pred = model.predict(X)
 mae = mean_absolute_error(y.flatten(), y_pred.flatten())
 print(mae)
+
+end = time.time()
+print(end-start)
 #print(future)
